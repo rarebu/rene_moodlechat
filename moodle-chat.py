@@ -3,7 +3,6 @@ import http.client
 import urllib.parse
 import zlib
 import sys
-import time
 
 
 class MyHTMLParser(HTMLParser):
@@ -25,9 +24,6 @@ class MyHTMLParser(HTMLParser):
                 if attr[1] == 'logintoken':
                     login_token_position = xx + 1
 
-    # def handle_endtag(self, tag):
-    #     print("End tag  :", tag)
-
     def handle_data(self, data):
         if data[:11] == '\n//<![CDATA':
             data = data.split('","')
@@ -40,31 +36,6 @@ class MyHTMLParser(HTMLParser):
                     self.jsrev = jsrev[8:]  # todo break
             except IndexError:
                 pass
-
-    # def handle_comment(self, data):
-    #     print("Comment  :", data)
-
-    # def handle_decl(self, data):
-    #     print("Decl     :", data)
-
-    def handle_data(self, data):
-        if data[:11] == '\n//<![CDATA':
-            data = data.split('","')
-            try:
-                sesskey = data[1]
-                jsrev = data[5]
-                if sesskey[:7] == 'sesskey':
-                    self.session_key = sesskey[10:]
-                if jsrev[:5] == 'jsrev':
-                    self.jsrev = jsrev[8:]  # todo break
-            except IndexError:
-                pass
-
-    # def handle_comment(self, data):
-    #     print("Comment  :", data)
-
-    # def handle_decl(self, data):
-    #     print("Decl     :", data)
 
 
 class MainMenu:
@@ -75,8 +46,8 @@ class MainMenu:
                 choice = input('\n::::: choose an option (h for help): ')
             except KeyboardInterrupt:
                 continue
-            if choice == 'R':
-                moodle_chat.refresh()
+            if choice == 'G':
+                moodle_chat.get_messages()
             elif choice == 'S':
                 moodle_chat.send()
             elif choice == 'Q':
@@ -88,12 +59,13 @@ class MainMenu:
 
     @staticmethod
     def print_options():
-        print('Valid options are R (Refresh), S (Send) and Q (Quit)')
+        print('Valid options are G (Get Messages), S (Send) and Q (Quit)')
 
 
 class MoodleChat:
     def __init__(self):
         self.parser = MyHTMLParser()
+        self.parser_for_get = MyHTMLParser()
         self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
 
         self.conn.request('GET', '/moodle/login/index.php')
@@ -142,19 +114,20 @@ class MoodleChat:
         response = self.conn.getresponse()
         response.read()
 
-    def refresh(self):
-
+    def refresh(self):  # todo rename to get_params
         params = urllib.parse.urlencode({'id': '183'})
         self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183', params,
                           self.payload)
         response = self.conn.getresponse()
         response = response.read()
         response = zlib.decompress(response, 16 + zlib.MAX_WBITS)
-        print('DATA: ' + str(response))
+        response = response.decode('utf-8')
+        self.parser.feed(response)
 
-    def send(self):
-        params = urllib.parse.urlencode({'message': 'hey test', 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
-                                         'sesskey': self.parser.session_key})
+    def get_messages(self):  # todo rename to refresh
+        self.refresh()
+        params = urllib.parse.urlencode({'message': '', 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
+                                         'sesskey': self.parser.session_key, 'refresh': 'Aktualisieren'})
         payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
                     'Accept-Language': 'de,en;q=0.5',
@@ -165,26 +138,34 @@ class MoodleChat:
                     'Host': 'moodle.htwg-konstanz.de',
                     'Referer': 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php',
                     'Upgrade-Insecure-Requests': '1'})
+        self.conn.request('POST', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php', params, payload)
+        response = self.conn.getresponse()
+        response = response.read()
+        response = zlib.decompress(response, 16 + zlib.MAX_WBITS)
+        response = response.decode('utf-8')
+        self.parser.feed(response)
+        print(response)
+
+    def send(self):
+        self.refresh()
+        referer = 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183&newonly=0&last=' +\
+                  self.parser.jsrev
+        params = urllib.parse.urlencode({'message': 'hey test', 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
+                                         'sesskey': self.parser.session_key})
+        payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Accept-Language': 'de,en;q=0.5',
+                    'Connection': 'keep-alive',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'DNT': '1',
+                    'Cookie': self.cookie,
+                    'Host': 'moodle.htwg-konstanz.de',
+                    'Referer': referer,
+                    'Upgrade-Insecure-Requests': '1'})
         self.conn.request('POST', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php', params,
                           payload)
         response = self.conn.getresponse()
-        data = response.read()
-        data = zlib.decompress(data, 16 + zlib.MAX_WBITS).decode('utf-8')
-        headers = response.getheaders()
-        print("POST " + str(response.getcode()))
-        #print(str(data))
-        print(str(headers))
-        for x in headers:
-            print(x)
-        # params = urllib.parse.urlencode({'newonly': '0', 'id': '183', 'last': self.parser.jsrev})
-        # self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php', params, payload)
-        # response = self.conn.getresponse()
-        # data = response.read()
-        # data = data.decode('utf-8')
-        # headers = response.getheaders()
-        # print("GET " + str(response.getcode()))
-        # print(str(data))
-        # print(str(headers))
+        response.read()
 
 
 MainMenu()
