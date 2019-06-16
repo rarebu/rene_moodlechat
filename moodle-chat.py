@@ -11,71 +11,67 @@ class MyHTMLParser(HTMLParser):
     jsrev = 0
     data_count = 0
     str = ''
+    send_mode = False
 
     def error(self, message):
         pass
 
     def handle_starttag(self, tag, attrs):
-        #print("Encountered a start tag:", tag)
-        #for attr in attrs:
-        #    print("     attr:", attr)
-        if tag == 'input':
-            xx = 0
-            login_token_position = -1
-            for attr in attrs:
-                xx += 1
-                if login_token_position == xx:
-                    self.login_token = attr[1]  # todo break
-                if attr[1] == 'logintoken':
-                    login_token_position = xx + 1
+        if not self.send_mode:
+            if tag == 'input':
+                xx = 0
+                login_token_position = -1
+                for attr in attrs:
+                    xx += 1
+                    if login_token_position == xx:
+                        self.login_token = attr[1]
+                    if attr[1] == 'logintoken':
+                        login_token_position = xx + 1
 
     def handle_data(self, data):
+        if self.send_mode:
+            if data[:11] == '\n//<![CDATA':
+                data = data.split('","')
+                try:
+                    sesskey = data[1]
+                    jsrev = data[5]
+                    if sesskey[:7] == 'sesskey':
+                        self.session_key = sesskey[10:]
+                    if jsrev[:5] == 'jsrev':
+                        self.jsrev = jsrev[8:]
+                except IndexError:
+                    pass
+            return
         if self.data_count == 0:
             if data == 'Zeit':
                 self.data_count += 1
-        elif self.data_count == 1:
-            self.data_count += 1
-            pass
-        elif self.data_count >= 2:
+        elif self.data_count >= 1:
             if data[:10] == 'Sie sind a':
                 msg = self.str.split('\n')
                 final_msg = []
                 for x in msg:
                     tmp = " ".join(x.split())
-                    if tmp != '':
+                    if tmp[8:] == 'betreten':
+                        print("HAT BETRETEN" + tmp)
+                    elif tmp != '':
                         final_msg.append(tmp)
                 if len(final_msg) == 1:
                     return
-                for x in range(0, 3):
-                    if final_msg[x] == 'Keine Mitteilungen gefunden':
-                        print(final_msg[x])
-                        self.data_count = 0
-                        self.str = ''
-                        return
-                    if x == 0:
-                        print('Message from:  ' + final_msg[x])
-                    elif x == 1:
-                        print(final_msg[x])
-                    elif x == 2:
-                        print('Time: ' + final_msg[x])
+                if final_msg[0] == 'Keine Mitteilungen gefunden':
+                    print(final_msg[0])
+                    self.data_count = 0
+                    self.str = ''
+                    return
+                for x in range(0, len(final_msg), 3):
+                    print('Message from: ' + final_msg[x])
+                    print(final_msg[x + 1])
+                    print('Time: ' + final_msg[x + 2] + '\n')
                 self.data_count = 0
                 self.str = ''
                 return
             else:
                 self.str = self.str + data
                 self.data_count += 1
-
-        if data[:11] == '\n//<![CDATA':
-            data = data.split('","')
-            try:
-                sesskey = data[1]
-                jsrev = data[5]
-                if sesskey[:7] == 'sesskey':
-                    self.session_key = sesskey[10:]
-                if jsrev[:5] == 'jsrev':
-                    self.jsrev = jsrev[8:]  # todo break
-            except IndexError:
-                pass
 
 
 class MainMenu:
@@ -86,9 +82,7 @@ class MainMenu:
                 choice = input('\n::::: choose an option (h for help): ')
             except KeyboardInterrupt:
                 continue
-            if choice == 'G':
-                moodle_chat.get_messages()
-            elif choice == 'S':
+            if choice == 'S':
                 moodle_chat.send()
             elif choice == 'R':
                 moodle_chat.refresh()
@@ -156,7 +150,14 @@ class MoodleChat:
         response = self.conn.getresponse()
         response.read()
 
-    def refresh(self):  # todo rename to get_params
+        params = urllib.parse.urlencode({'id': '183'})
+        self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
+        self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183',
+                          params, self.payload)
+        response = self.conn.getresponse()
+        response.read()
+
+    def refresh(self):
         params = urllib.parse.urlencode({'id': '183'})
         self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183', params,
                           self.payload)
@@ -173,33 +174,14 @@ class MoodleChat:
         response = response.decode('utf-8')
         self.parser.feed(response)
 
-    def get_messages(self):  # todo rename to refresh
-        self.refresh()
-        params = urllib.parse.urlencode({'message': '', 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
-                                         'sesskey': self.parser.session_key, 'refresh': 'Aktualisieren'})
-        payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Accept-Language': 'de,en;q=0.5',
-                    'Connection': 'keep-alive',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'DNT': '1',
-                    'Cookie': self.cookie,
-                    'Host': 'moodle.htwg-konstanz.de',
-                    'Referer': 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php',
-                    'Upgrade-Insecure-Requests': '1'})
-        self.conn.request('POST', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php', params, payload)
-        response = self.conn.getresponse()
-        response = response.read()
-        response = zlib.decompress(response, 16 + zlib.MAX_WBITS)
-        response = response.decode('utf-8')
-        self.parser.feed(response)
-        #print(response)
-
     def send(self):
+        self.parser.send_mode = True
         self.refresh()
+        self.parser.send_mode = False
+        message = input("Enter Message: ")
         referer = 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183&newonly=0&last=' +\
                   self.parser.jsrev
-        params = urllib.parse.urlencode({'message': 'hey test', 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
+        params = urllib.parse.urlencode({'message': message, 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
                                          'sesskey': self.parser.session_key})
         payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
