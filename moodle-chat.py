@@ -49,18 +49,29 @@ class MyHTMLParser(HTMLParser):
             if data[:10] == 'Sie sind a':
                 msg = self.str.split('\n')
                 final_msg = []
+                tmp_val = 0
                 for x in msg:
                     tmp = " ".join(x.split())
-                    if tmp[8:] == 'betreten':
-                        print("HAT BETRETEN" + tmp)
+                    if tmp_val == 1:
+                        tmp_val = 0
+                        continue
+                    elif tmp[-8:] == 'betreten':
+                        print(tmp)
+                        tmp_val = 1
+                    elif tmp[-9:] == 'verlassen':
+                        print(tmp)
+                        tmp_val = 1
                     elif tmp != '':
                         final_msg.append(tmp)
                 if len(final_msg) == 1:
                     return
-                if final_msg[0] == 'Keine Mitteilungen gefunden':
-                    print(final_msg[0])
-                    self.data_count = 0
-                    self.str = ''
+                try:
+                    if final_msg[0] == 'Keine Mitteilungen gefunden':
+                        print(final_msg[0])
+                        self.data_count = 0
+                        self.str = ''
+                        return
+                except IndexError:
                     return
                 for x in range(0, len(final_msg), 3):
                     print('Message from: ' + final_msg[x])
@@ -95,7 +106,7 @@ class MainMenu:
 
     @staticmethod
     def print_options():
-        print('Valid options are G (Get Messages), S (Send) and Q (Quit)')
+        print('Valid options are R (Refresh), S (Send) and Q (Quit)')
 
 
 class MoodleChat:
