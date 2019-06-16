@@ -9,11 +9,16 @@ class MyHTMLParser(HTMLParser):
     login_token = 0
     session_key = ''
     jsrev = 0
+    data_count = 0
+    str = ''
 
     def error(self, message):
         pass
 
     def handle_starttag(self, tag, attrs):
+        #print("Encountered a start tag:", tag)
+        #for attr in attrs:
+        #    print("     attr:", attr)
         if tag == 'input':
             xx = 0
             login_token_position = -1
@@ -25,6 +30,41 @@ class MyHTMLParser(HTMLParser):
                     login_token_position = xx + 1
 
     def handle_data(self, data):
+        if self.data_count == 0:
+            if data == 'Zeit':
+                self.data_count += 1
+        elif self.data_count == 1:
+            self.data_count += 1
+            pass
+        elif self.data_count >= 2:
+            if data[:10] == 'Sie sind a':
+                msg = self.str.split('\n')
+                final_msg = []
+                for x in msg:
+                    tmp = " ".join(x.split())
+                    if tmp != '':
+                        final_msg.append(tmp)
+                if len(final_msg) == 1:
+                    return
+                for x in range(0, 3):
+                    if final_msg[x] == 'Keine Mitteilungen gefunden':
+                        print(final_msg[x])
+                        self.data_count = 0
+                        self.str = ''
+                        return
+                    if x == 0:
+                        print('Message from:  ' + final_msg[x])
+                    elif x == 1:
+                        print(final_msg[x])
+                    elif x == 2:
+                        print('Time: ' + final_msg[x])
+                self.data_count = 0
+                self.str = ''
+                return
+            else:
+                self.str = self.str + data
+                self.data_count += 1
+
         if data[:11] == '\n//<![CDATA':
             data = data.split('","')
             try:
@@ -50,6 +90,8 @@ class MainMenu:
                 moodle_chat.get_messages()
             elif choice == 'S':
                 moodle_chat.send()
+            elif choice == 'R':
+                moodle_chat.refresh()
             elif choice == 'Q':
                 print('\n::::: Quitting..')
                 break
@@ -118,7 +160,14 @@ class MoodleChat:
         params = urllib.parse.urlencode({'id': '183'})
         self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183', params,
                           self.payload)
-        response = self.conn.getresponse()
+        try:
+            response = self.conn.getresponse()
+        except http.client.RemoteDisconnected:
+            self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
+            self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183',
+                              params,
+                              self.payload)
+            response = self.conn.getresponse()
         response = response.read()
         response = zlib.decompress(response, 16 + zlib.MAX_WBITS)
         response = response.decode('utf-8')
@@ -144,7 +193,7 @@ class MoodleChat:
         response = zlib.decompress(response, 16 + zlib.MAX_WBITS)
         response = response.decode('utf-8')
         self.parser.feed(response)
-        print(response)
+        #print(response)
 
     def send(self):
         self.refresh()
