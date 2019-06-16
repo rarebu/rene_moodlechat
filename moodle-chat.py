@@ -3,6 +3,7 @@ import http.client
 import urllib.parse
 import zlib
 import sys
+import os
 
 
 class MyHTMLParser(HTMLParser):
@@ -95,6 +96,8 @@ class MainMenu:
                 continue
             if choice == 'S':
                 moodle_chat.send()
+            elif choice == 'D':
+                moodle_chat.download()
             elif choice == 'R':
                 moodle_chat.refresh()
             elif choice == 'Q':
@@ -106,7 +109,7 @@ class MainMenu:
 
     @staticmethod
     def print_options():
-        print('Valid options are R (Refresh), S (Send) and Q (Quit)')
+        print('Valid options are R (Refresh), S (Send), D (Download) and Q (Quit)')
 
 
 class MoodleChat:
@@ -208,6 +211,23 @@ class MoodleChat:
                           payload)
         response = self.conn.getresponse()
         response.read()
+
+    def download(self):
+        self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/pluginfile.php/188750/mod_assign'
+                                 '/introattachment/0/AIN%20RN%20-%20Laboraufgabe%20-%20HTTP.pdf?forcedownload=1',
+                          None, self.payload)
+        try:
+            response = self.conn.getresponse()
+        except http.client.RemoteDisconnected:
+            self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
+            self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/pluginfile.php/188750/mod_assign'
+                                     '/introattachment/0/AIN%20RN%20-%20Laboraufgabe%20-%20HTTP.pdf?forcedownload=1',
+                              None, self.payload)
+            response = self.conn.getresponse()
+        response = response.read()
+        with open('lab5chat.pdf', 'wb') as f:
+            f.write(response)
+            print('Saving file to: ' + os.path.realpath(f.name))
 
 
 MainMenu()
