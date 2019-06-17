@@ -1,6 +1,5 @@
 from html.parser import HTMLParser
 import http.client
-import urllib.parse
 import zlib
 import sys
 import os
@@ -114,6 +113,9 @@ class MainMenu:
 
 class MoodleChat:
     def __init__(self):
+        self.chaturl = 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183'
+        self.pdfurl = 'https://moodle.htwg-konstanz.de/moodle/pluginfile.php/188750/mod_assign/introattachment/' \
+                      '0/AIN%20RN%20-%20Laboraufgabe%20-%20HTTP.pdf?forcedownload=1'
         self.parser = MyHTMLParser()
         self.parser_for_get = MyHTMLParser()
         self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
@@ -123,9 +125,7 @@ class MoodleChat:
         headers = response.getheaders()[2][1]
         cookie = headers.split('; path=')[0]
         self.parser.feed(response.read().decode('utf-8'))
-        login_token = self.parser.login_token
-        params = urllib.parse.urlencode({'username': 'rnetin', 'password': 'ntsmobil', 'logintoken':
-                                         login_token})
+        params = 'username=rnetin&password=ntsmobil&logintoken=' + self.parser.login_token
         payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
                     'Accept-Language': 'de,en;q=0.5',
@@ -144,7 +144,7 @@ class MoodleChat:
         self.cookie = headers[5][1].split(';')[0]
         location = headers[7][1]
         test_session_id = location.split('?testsession=')[1]
-        params = urllib.parse.urlencode({'testsession': test_session_id})
+        params = 'username=rnetin&password=ntsmobil&logintoken=' + test_session_id
         self.payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                          'Accept-Encoding': 'gzip, deflate, br',
                          'Accept-Language': 'de,en;q=0.5',
@@ -164,23 +164,21 @@ class MoodleChat:
         response = self.conn.getresponse()
         response.read()
 
-        params = urllib.parse.urlencode({'id': '183'})
+        params = 'id=183'
         self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
-        self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183',
+        self.conn.request('GET', self.chaturl,
                           params, self.payload)
         response = self.conn.getresponse()
         response.read()
 
     def refresh(self):
-        params = urllib.parse.urlencode({'id': '183'})
-        self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183', params,
-                          self.payload)
+        params = 'id=183'
+        self.conn.request('GET', self.chaturl, params, self.payload)
         try:
             response = self.conn.getresponse()
         except http.client.RemoteDisconnected:
             self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
-            self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183',
-                              params,
+            self.conn.request('GET', self.chaturl, params,
                               self.payload)
             response = self.conn.getresponse()
         response = response.read()
@@ -193,10 +191,9 @@ class MoodleChat:
         self.refresh()
         self.parser.send_mode = False
         message = input("Enter Message: ")
-        referer = 'https://moodle.htwg-konstanz.de/moodle/mod/chat/gui_basic/index.php?id=183&newonly=0&last=' +\
-                  self.parser.jsrev
-        params = urllib.parse.urlencode({'message': message, 'id': '183', 'groupid': '0', 'last': self.parser.jsrev,
-                                         'sesskey': self.parser.session_key})
+        referer = self.chaturl + '&newonly=0&last=' + self.parser.jsrev
+        params = 'message=' + message + '&id=183&groupid=0&last=' + self.parser.jsrev + '&sesskey=' +\
+                 self.parser.session_key
         payload = ({'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Encoding': 'gzip, deflate, br',
                     'Accept-Language': 'de,en;q=0.5',
@@ -213,16 +210,12 @@ class MoodleChat:
         response.read()
 
     def download(self):
-        self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/pluginfile.php/188750/mod_assign'
-                                 '/introattachment/0/AIN%20RN%20-%20Laboraufgabe%20-%20HTTP.pdf?forcedownload=1',
-                          None, self.payload)
+        self.conn.request('GET', self.pdfurl, None, self.payload)
         try:
             response = self.conn.getresponse()
         except http.client.RemoteDisconnected:
             self.conn = http.client.HTTPSConnection('moodle.htwg-konstanz.de')
-            self.conn.request('GET', 'https://moodle.htwg-konstanz.de/moodle/pluginfile.php/188750/mod_assign'
-                                     '/introattachment/0/AIN%20RN%20-%20Laboraufgabe%20-%20HTTP.pdf?forcedownload=1',
-                              None, self.payload)
+            self.conn.request('GET', self.pdfurl, None, self.payload)
             response = self.conn.getresponse()
         response = response.read()
         with open('lab5chat.pdf', 'wb') as f:
